@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from app.browser.adapter import MockBrowserAdapter
 from app.graph.state import AgentState, PlanStep
+
+_browser_adapter = MockBrowserAdapter()
 
 
 def load_context(state: AgentState) -> dict:
@@ -65,7 +68,8 @@ def check_policy(state: AgentState) -> dict:
     if unsupported:
         return {
             "needs_approval": True,
-            "events": state.get("events", []) + [{"type": "policy_blocked", "reason": "unsupported_action"}],
+            "events": state.get("events", [])
+            + [{"type": "policy_blocked", "reason": "unsupported_action"}],
         }
     return {
         "needs_approval": False,
@@ -74,7 +78,7 @@ def check_policy(state: AgentState) -> dict:
 
 
 def execute_step(state: AgentState) -> dict:
-    """Mock executor: intentionally does not interact with tabs or the operating system."""
+    """Execute through the adapter boundary; the default adapter is a harmless mock."""
     plan = state.get("plan", [])
     if not plan:
         return {"execution_result": "", "error": state.get("error") or "Nothing to execute."}
@@ -82,17 +86,14 @@ def execute_step(state: AgentState) -> dict:
     if step["action"] != "analyze_request":
         return {"execution_result": "", "error": "Action is not supported by the mock adapter."}
 
-    context = state.get("context", {})
-    page_title = context.get("page_title")
-    page_url = context.get("page_url")
-    page_summary = (
-        f" Context supplied for page '{page_title}' ({page_url})."
-        if page_title or page_url
-        else " No browser page context was supplied."
+    result = _browser_adapter.analyze_request(
+        request=state.get("request", ""),
+        context=state.get("context", {}),
     )
     return {
-        "execution_result": f"Request received: {state.get('request', '')}.{page_summary}",
-        "events": state.get("events", []) + [{"type": "step_executed", "step_id": step["id"], "mock": True}],
+        "execution_result": result,
+        "events": state.get("events", [])
+        + [{"type": "step_executed", "step_id": step["id"], "mock": True}],
     }
 
 
